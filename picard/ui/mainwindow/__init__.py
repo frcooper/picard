@@ -1661,6 +1661,12 @@ class MainWindow(QtWidgets.QMainWindow, PreserveGeometry):
                         'filename': obj.filename,
                         'error': obj.errors[0] if obj.errors else '',
                     }
+                elif obj.pending_save_collision_path:
+                    msg = N_("%(filename)s (collision: %(path)s)")
+                    mparms = {
+                        'filename': obj.filename,
+                        'path': obj.pending_save_collision_path,
+                    }
                 else:
                     msg = N_("%(filename)s")
                     mparms = {
@@ -1676,6 +1682,13 @@ class MainWindow(QtWidgets.QMainWindow, PreserveGeometry):
                             'filename': file.filename,
                             'similarity': file.similarity * 100,
                             'error': file.errors[0] if file.errors else '',
+                        }
+                    elif file.pending_save_collision_path:
+                        msg = N_("%(filename)s (%(similarity)d%%) (collision: %(path)s)")
+                        mparms = {
+                            'filename': file.filename,
+                            'similarity': file.similarity * 100,
+                            'path': file.pending_save_collision_path,
                         }
                     else:
                         msg = N_("%(filename)s (%(similarity)d%%)")

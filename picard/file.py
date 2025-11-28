@@ -97,6 +97,8 @@ from picard.util import (
     format_time,
     is_absolute_path,
     normpath,
+    samefile,
+    samepath,
     thread,
     tracknum_and_title_from_filename,
 )
@@ -122,6 +124,21 @@ FILE_COMPARISON_WEIGHTS = {
     'releasetype': 14,
     'title': 13,
     'totaltracks': 4,
+}
+
+
+COLLISION_RELEVANT_SETTINGS = {
+    'ascii_filenames',
+    'file_renaming_scripts',
+    'move_files',
+    'move_files_to',
+    'rename_files',
+    'replace_dir_separator',
+    'replace_spaces_with_underscores',
+    'selected_file_naming_script_id',
+    'win_compat_replacements',
+    'windows_compatibility',
+    'windows_long_paths',
 }
 
 
@@ -179,6 +196,8 @@ class File(MetadataItem):
         self.acoustid_fingerprint = None
         self.acoustid_length = 0
         self.match_recordingid = None
+
+        self._pending_save_collision_path = None
 
     def __repr__(self):
         return '<%s %r>' % (type(self).__name__, self.base_filename)
@@ -347,6 +366,25 @@ class File(MetadataItem):
             self.update(signal=False)
             self.metadata_images_changed.emit()
 
+    @property
+    def pending_save_collision_path(self):
+        return self._pending_save_collision_path
+
+    def set_pending_save_collision(self, target_path):
+        if self._pending_save_collision_path == target_path:
+            return
+        self._pending_save_collision_path = target_path
+        self.update_item(update_selection=False)
+
+    def clear_pending_save_collision(self):
+        if self._pending_save_collision_path is None:
+            return
+        self._pending_save_collision_path = None
+        self.update_item(update_selection=False)
+
+    def refresh_pending_save_collision(self, settings=None):
+        evaluate_pending_save_collision(self, settings=settings)
+
     def has_error(self):
         return self.state == File.ERROR
 
@@ -463,6 +501,7 @@ class File(MetadataItem):
 
             # run post save hook
             run_file_post_save_processors(self)
+            self.clear_pending_save_collision()
 
         # Force update to ensure file status icon changes immediately after save
         self.update()
@@ -643,6 +682,7 @@ class File(MetadataItem):
             self.parent_item.remove_file(self)
         self.tagger.acoustidmanager.remove(self)
         self.state = File.REMOVED
+        self.clear_pending_save_collision()
 
     def move(self, to_parent_item):
         # To be able to move a file the target must implement add_file(file)
@@ -734,6 +774,8 @@ class File(MetadataItem):
                         self.state = File.CHANGED
                     else:
                         self.state = File.NORMAL
+        self.refresh_pending_save_collision()
+
         if signal:
             log.debug("Updating file %r", self)
             self.update_item()
@@ -1023,3 +1065,68 @@ def run_file_post_removal_from_track_processors(track_object, file_object):
 
 def run_file_post_save_processors(file_object):
     file_post_save_processors.run(file_object)
+
+
+def _predict_destination_filename(file_object, settings):
+    metadata = Metadata()
+    metadata.copy(file_object.metadata)
+    return file_object.make_filename(file_object.filename, metadata, settings)
+
+
+def _destination_collides_with_existing_file(target_path, current_path):
+    try:
+        if not os.path.exists(target_path):
+            return False
+    except OSError as error:
+        log.debug("Unable to inspect destination %r: %s", target_path, error)
+        return False
+
+    try:
+        return not samefile(target_path, current_path)
+    except OSError:
+        # If we cannot determine whether both paths reference the same file assume collision.
+        return True
+
+
+def evaluate_pending_save_collision(file_object, settings=None):
+    if file_object.state == File.REMOVED:
+        file_object.clear_pending_save_collision()
+        return
+
+    current_path = file_object.filename
+    if not current_path:
+        file_object.clear_pending_save_collision()
+        return
+
+    if settings is None:
+        settings = get_config().setting
+
+    if not (settings['rename_files'] or settings['move_files']):
+        file_object.clear_pending_save_collision()
+        return
+
+    try:
+        target_path = _predict_destination_filename(file_object, settings)
+    except Exception as error:  # pragma: no cover - defensive, should not normally happen
+        log.error("Failed to predict destination filename for %r: %s", file_object, error)
+        file_object.clear_pending_save_collision()
+        return
+
+    if samepath(target_path, current_path):
+        file_object.clear_pending_save_collision()
+        return
+
+    if _destination_collides_with_existing_file(target_path, current_path):
+        log.warning(
+            "Saving %r would overwrite existing file %r", current_path, target_path
+        )
+        file_object.set_pending_save_collision(target_path)
+    else:
+        file_object.clear_pending_save_collision()
+
+
+def _check_pending_save_collision(_track, file_object):
+    evaluate_pending_save_collision(file_object)
+
+
+file_post_addition_to_track_processors.register(__name__, _check_pending_save_collision)

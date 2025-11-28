@@ -117,7 +117,10 @@ from picard.disc import (
     eaclog,
     whipperlog,
 )
-from picard.file import File
+from picard.file import (
+    File,
+    COLLISION_RELEVANT_SETTINGS,
+)
 from picard.formats import open_ as open_file
 from picard.i18n import (
     N_,
@@ -230,6 +233,7 @@ class Tagger(QtWidgets.QApplication):
         self._init_plugins()
         self._init_browser_integration()
         self._init_tagger_entities()
+        self._init_collision_watchers()
 
         self._init_ui(config)
 
@@ -384,6 +388,21 @@ class Tagger(QtWidgets.QApplication):
         self.nats = None
         # When True, we are restoring a session; skip auto-matching by MBIDs
         self._restoring_session = False
+
+    def _init_collision_watchers(self):
+        config = get_config()
+        config.setting.setting_changed.connect(self._on_collision_related_setting_changed)
+
+    def _on_collision_related_setting_changed(self, name, _old_value, _new_value):
+        if name in COLLISION_RELEVANT_SETTINGS:
+            self.refresh_pending_save_collisions()
+
+    def refresh_pending_save_collisions(self):
+        if not self.files:
+            return
+        settings = get_config().setting
+        for file in list(self.files.values()):
+            file.refresh_pending_save_collision(settings=settings)
 
     def _init_ui(self, config):
         """Initialize User Interface / Main Window"""

@@ -663,6 +663,11 @@ class FileItem(TreeItem):
             else:
                 icon = FileItem.icon_error
                 tooltip = _("Processing error(s): See the Errors tab in the File Info dialog")
+        elif file.pending_save_collision_path:
+            icon = FileItem.icon_error
+            tooltip = _("Saving this file would overwrite an existing file at %(path)s") % {
+                'path': file.pending_save_collision_path,
+            }
         elif isinstance(file.parent_item, Track):
             if file.state == File.NORMAL:
                 icon = FileItem.icon_saved
