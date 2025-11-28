@@ -40,6 +40,11 @@ Binary downloads are available on the [Picard download page](https://picard.musi
 
 [INSTALL.md has instructions on building this codebase.](INSTALL.md)
 
+To run Picard with user-installed plugins stored outside the default location
+without touching global settings, start it with
+`picard --plugin-dir /path/to/my/plugins` (this is equivalent to setting the
+`PICARD_PLUGIN_DIR` environment variable for that run).
+
 
 ## Support and issue reporting
 

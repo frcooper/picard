@@ -70,6 +70,34 @@ from PyQt6 import (
     QtWidgets,
 )
 
+
+PLUGIN_DIR_ARGUMENT = '--plugin-dir'
+
+
+def _normalize_plugin_dir_argument(path):
+    if not path:
+        return None
+    expanded = os.path.expandvars(os.path.expanduser(path))
+    return os.path.abspath(expanded)
+
+
+def _find_plugin_dir_argument(argv):
+    for index, arg in enumerate(argv[1:], start=1):
+        if arg == '--':
+            break
+        if arg == PLUGIN_DIR_ARGUMENT:
+            if index + 1 < len(argv):
+                return argv[index + 1]
+            break
+        if arg.startswith(f'{PLUGIN_DIR_ARGUMENT}='):
+            return arg.split('=', 1)[1]
+    return None
+
+
+_CLI_PLUGIN_DIR_OVERRIDE = _normalize_plugin_dir_argument(_find_plugin_dir_argument(sys.argv))
+if _CLI_PLUGIN_DIR_OVERRIDE:
+    os.environ['PICARD_PLUGIN_DIR'] = _CLI_PLUGIN_DIR_OVERRIDE
+
 from picard import (
     PICARD_APP_ID,
     PICARD_APP_NAME,
@@ -101,6 +129,7 @@ from picard.config_upgrade import upgrade_config
 from picard.const import (
     BROWSER_INTEGRATION_LOCALHOST,
     USER_DIR,
+    USER_PLUGIN_DIR,
 )
 from picard.const.appdirs import sessions_folder
 from picard.const.sys import (
@@ -329,6 +358,7 @@ class Tagger(QtWidgets.QApplication):
         log.debug("Configuration file path: %r", config.fileName())
 
         log.debug("User directory: %r", os.path.abspath(USER_DIR))
+        log.debug("User plugin directory: %r", os.path.abspath(USER_PLUGIN_DIR))
         log.debug("System long path support: %r", system_supports_long_paths())
 
         # log interesting environment variables
@@ -1404,6 +1434,14 @@ If a new instance will not be spawned files/directories will be passed to the ex
     parser.add_argument('-P', '--no-plugins', action='store_true', help="do not load any plugins")
     parser.add_argument('--no-crash-dialog', action='store_true', help="disable the crash dialog")
     parser.add_argument(
+        '--plugin-dir',
+        dest='plugin_dir',
+        action='store',
+        default=None,
+        metavar='DIR',
+        help="load user plugins from DIR instead of the default location (same as PICARD_PLUGIN_DIR)",
+    )
+    parser.add_argument(
         '--debug-opts',
         action='store',
         default=None,
@@ -1437,6 +1475,12 @@ If a new instance will not be spawned files/directories will be passed to the ex
             remote_command_args = e[1:] or ['']
             for arg in remote_command_args:
                 args.processable.append(f"{e[0]} {arg}")
+
+    if args.plugin_dir:
+        args.plugin_dir = _normalize_plugin_dir_argument(args.plugin_dir)
+        os.environ['PICARD_PLUGIN_DIR'] = args.plugin_dir
+    elif _CLI_PLUGIN_DIR_OVERRIDE:
+        args.plugin_dir = _CLI_PLUGIN_DIR_OVERRIDE
 
     return args
 

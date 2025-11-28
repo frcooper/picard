@@ -4,6 +4,9 @@
 - [PICARD-2909](https://tickets.metabrainz.org/browse/PICARD-2909) - libopus fails to read METADATA_BLOCK_PICTURE without bit depth set
 - [PICARD-3034](https://tickets.metabrainz.org/browse/PICARD-3034) - Windows: SSL errors if conflicting libssl is installed system wide
 
+## Improvements
+- Add command-line option `--plugin-dir` to override the user plugin directory from the CLI
+
 
 # Version 2.13.2 - 2025-02-07
 
